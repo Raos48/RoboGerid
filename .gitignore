@@ -1,0 +1,28 @@
+# Ambiente virtual
+.venv_new/
+.venv_new/*
+
+# Arquivos específicos
+notes.txt
+transbordo.py
+Auxiliar.txt
+output/
+*.xlsx
+*.xls
+*.epynb
+.ipynb_checkpoints/
+*.tcl
+*.bak1
+*.bak2
+*.bak3
+*.bak4
+*.ipynb
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Outros
+.DS_Store
