@@ -5,18 +5,23 @@
 #  in conjunction with Tcl version 8.6
 #    Dec 30, 2024 05:30:36 PM -03  platform: Windows NT
 
+import sys
+import threading
 # --- START CUSTOM CODE ---
 import tkinter as tk
 from tkinter import ttk
-import sys
-import bot_gerid_support
-from excel_import import import_excel
-from gerid import run_automation
-import threading
 
-def run_automation_thread(file_path, update_label_func=None):
-    thread = threading.Thread(target=run_automation, args=(file_path, update_label_func))
+from excel_import import import_excel
+from gerid import run_automation_gerid
+from saggestao_servidores import run_automation_thread_saggestao
+
+import bot_gerid_support
+
+
+def run_automation_thread(file_path, update_label_func=None, update_status_func=None):
+    thread = threading.Thread(target=run_automation_gerid, args=(file_path, update_label_func, update_status_func))
     thread.start()
+    return thread  # Retorna a thread para que possamos acompanhar seu estado
 
 def vp_start_gui():
     '''Starting point when module is the main routine.'''
@@ -45,24 +50,11 @@ def destroy_Toplevel1():
     w = None
 
 class Toplevel1:
-    def run_automation(self):
-        if self.file_path:
-            run_automation_thread(self.file_path, self.update_label)
-        else:
-            print("Por favor, importe um arquivo Excel primeiro.")
-
-    def import_file(self):
-        self.workbook, self.sheet, self.file_path = import_excel()
-        if self.file_path:
-            self.Label1.configure(text=self.file_path)
-
-    def update_label(self, linha):
-        self.Label2.configure(text=str(linha - 1))
-
     def __init__(self, top=None):
         '''This class configures and populates the toplevel window.
            top is the toplevel containing window.'''
         self.top = top
+        self.automation_thread = None  # Variável para armazenar a thread de automação
         _bgcolor = '#d9d9d9'  # X11 color: 'gray85'
         _fgcolor = '#000000'  # X11 color: 'black'
         _compcolor = '#d9d9d9' # X11 color: 'gray85'
@@ -77,7 +69,7 @@ class Toplevel1:
         self.style.map('.',background=
             [('selected', _compcolor), ('active',_ana2color)])
 
-        top.geometry("647x498+559+201")
+        top.geometry("647x515+559+201")
         top.minsize(120, 1)
         top.maxsize(3524, 1063)
         top.resizable(1, 1)
@@ -98,12 +90,12 @@ class Toplevel1:
         self.Labelframe2.configure(highlightcolor="black")
         # --------------
         self.Label2 = tk.Label(self.Labelframe2)
-        self.Label2.place(x=20, y=20, height=26, width=18, bordermode='ignore')
+        self.Label2.place(x=20, y=20, height=30, width=30, bordermode='ignore')
         self.Label2.configure(activebackground="#f9f9f9")
         self.Label2.configure(activeforeground="black")
         self.Label2.configure(background="#d9d9d9")
         self.Label2.configure(disabledforeground="#a3a3a3")
-        self.Label2.configure(font="-family {Verdana} -size 15 -weight bold")
+        self.Label2.configure(font="-family {Verdana} -size 10 -weight bold")
         self.Label2.configure(foreground="#000000")
         self.Label2.configure(highlightbackground="#d9d9d9")
         self.Label2.configure(highlightcolor="black")
@@ -126,6 +118,8 @@ class Toplevel1:
         self.TCombobox1.configure(textvariable=bot_gerid_support.combobox)
         self.TCombobox1.configure(foreground="#000000")
         self.TCombobox1.configure(takefocus="")
+        self.TCombobox1['values'] = ['Atribuição e Revalidação Acessos GERID', 'Configuração de Perfis SAGGESTÃO']
+        self.TCombobox1.current(0)  # Define a primeira opção como padrão
         # SELECT FUNCIONALIDADE========================================
 
         # SELECT INSTANCIAS=================================================
@@ -210,8 +204,8 @@ class Toplevel1:
         self.Button2.configure(highlightcolor="black")
         self.Button2.configure(pady="0")
         self.Button2.configure(takefocus="0")
-        self.Button2.configure(text='''Executar''')
-        self.Button2.configure(command=self.run_automation)
+        self.Button2.configure(text='''Executar''')        
+        self.Button2.configure(command=self.run_selected_automation)
 
         self.TProgressbar1 = ttk.Progressbar(top)
         self.TProgressbar1.place(x=20, y=140,height=22, width=514)
@@ -227,18 +221,81 @@ class Toplevel1:
         self.terminal = tk.Text(self.terminal_frame, wrap=tk.WORD, bg='black', fg='white')
         self.terminal.pack(expand=True, fill='both')
 
-        # Redirecionar a saída padrão para o terminal
+        # Redirecionar a saída padrão e de erro para o terminal
         sys.stdout = self
+        sys.stderr = self
+
+        # Label para indicar o status da execução
+        self.status_label = tk.Label(top)
+        self.status_label.place(x=9, y=483, height=26, width=615)
+        self.status_label.configure(activebackground="#f9f9f9")
+        self.status_label.configure(activeforeground="black")
+        self.status_label.configure(background="#d9d9d9")
+        self.status_label.configure(disabledforeground="#a3a3a3")
+        self.status_label.configure(font="-family {Verdana} -size 9 -weight bold")
+        self.status_label.configure(foreground="#000000")
+        self.status_label.configure(highlightbackground="#d9d9d9")
+        self.status_label.configure(highlightcolor="black")
+        self.status_label.configure(text='''Aguardando execução...''')
 
         self.menubar = tk.Menu(top,font="TkMenuFont",bg=_bgcolor,fg=_fgcolor)
         top.configure(menu = self.menubar)
 
+    
+    def run_selected_automation(self):
+        selected_option = self.TCombobox1.get()
+        if selected_option == 'Atribuição e Revalidação Acessos GERID':
+            self.run_automation_gerid()
+        elif selected_option == 'Configuração de Perfis SAGGESTÃO':
+            self.run_automation_saggestao()
+        else:
+            print("Opção inválida selecionada.")
+    
+    
+    def run_automation_gerid(self):
+        if self.file_path:
+            self.automation_thread = run_automation_thread(self.file_path, self.update_label, self.update_status)
+        else:
+            print("Por favor, importe um arquivo Excel primeiro.")
+
+    def run_automation_saggestao(self):
+        if self.file_path:  
+            self.automation_thread = run_automation_thread_saggestao(self.file_path, self.update_label, self.update_status)
+            print("Executando a automação para Configuração de Perfis SAGGESTÃO.")
+        else:
+            print("Por favor, importe um arquivo Excel primeiro.")
+    
     def write(self, txt):
         self.terminal.insert(tk.END, txt)
         self.terminal.see(tk.END)
 
     def flush(self):
         pass
+
+    def run_automation(self):
+        if self.file_path:
+            self.automation_thread = run_automation_thread(self.file_path, self.update_label, self.update_status)
+        else:
+            print("Por favor, importe um arquivo Excel primeiro.")
+
+    def import_file(self):
+        try:
+            self.workbook, self.sheet, self.file_path = import_excel()
+            if self.file_path:
+                self.Label1.configure(text=self.file_path)
+        except:
+            pass
+
+    def update_label(self, linha):
+        self.Label2.configure(text=str(linha - 1))
+
+    def update_status(self, status):
+        self.status_label.configure(text=status)
+
+    def on_closing(self):
+        if self.automation_thread and self.automation_thread.is_alive():
+            self.automation_thread.join()  # Aguarda a thread terminar
+        self.top.destroy()
 
 if __name__ == '__main__':
     vp_start_gui()

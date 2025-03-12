@@ -1,45 +1,33 @@
-import queue
-import subprocess
-import threading
-import time
-import tkinter as tk
-from datetime import datetime
-from tkinter import messagebox
-
-import openpyxl
 from selenium import webdriver
-from selenium.common.exceptions import (ElementNotInteractableException,
-                                        JavascriptException,
-                                        NoSuchElementException,
-                                        TimeoutException)
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
-
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementNotInteractableException
+from selenium.common.exceptions import JavascriptException, NoSuchElementException
+from datetime import datetime
+import openpyxl
+import time
+import tkinter as tk
+from tkinter import messagebox
+import subprocess
+import threading
+import queue
 
 def show_success_popup():
     root = tk.Tk()
     root.withdraw()  # Esconde a janela principal
     messagebox.showinfo("Sucesso", "A operação foi executada com sucesso!")
     root.destroy()
-    
-    
-def close_workbook(workbook):
-    try:
-        workbook.close()
-        print("Arquivo Excel fechado com sucesso.")
-    except Exception as e:
-        print(f"Erro ao fechar o arquivo Excel: {e}")
 
 def execute_javascript_with_retry(driver, script, max_attempts=3, refresh_delay=10, retry_delay=5):
     attempts = 0
     while attempts < max_attempts:
         try:
             driver.execute_script(script)
-            #print("Script JavaScript executado com sucesso.")
+            print("Script JavaScript executado com sucesso.")
             return True
         except JavascriptException as js_error:
             print(f"Erro ao executar script JavaScript: {js_error}. Tentando novamente em {retry_delay} segundos...")
@@ -109,7 +97,7 @@ def verificar_mensagem_operacao(driver, worksheet, linha, coluna):
 
 
 
-def run_automation_gerid(file_path, update_label_func=None, update_status_func=None):
+def run_automation(file_path, update_label_func=None, update_status_func=None):
     workbook = openpyxl.load_workbook(file_path)
     worksheet = workbook.active
 
@@ -142,16 +130,6 @@ def run_automation_gerid(file_path, update_label_func=None, update_status_func=N
         
         while Finaliza:
             try:
-                
-                driver.get("https://geridinss.dataprev.gov.br/gpa")
-                success = execute_javascript_with_retry(driver, "document.getElementById('formMenu:btAtribAcesso').click();")
-                if success:
-                    pass
-                else:
-                    print("Não foi possível clicar no botão após várias tentativas.")
-                    time.sleep(5)
-                    continue                
-                
                 servidor = worksheet.cell(row=linha, column=1).value
                 Sistema = worksheet.cell(row=linha, column=coluna).value
                 Subsistema = worksheet.cell(row=linha, column=coluna + 1).value
@@ -163,15 +141,12 @@ def run_automation_gerid(file_path, update_label_func=None, update_status_func=N
                 if not servidor:
                     try:
                         workbook.save(file_path)
-                        print("Arquivo salvo com sucesso.")
-                        close_workbook(workbook)
                     except Exception as e:
-                        print(f"Erro ao salvar ou fechar o arquivo: {e}")
-                    finally:
-                        driver.quit()
-                        print("Final!")
-                        show_success_popup()
-                        return
+                        print(f"Erro ao salvar o arquivo: {e}")
+                    driver.quit()
+                    print("Final!")
+                    show_success_popup()
+                    break
 
                 if not Sistema:
                     coluna = 3
@@ -421,6 +396,6 @@ def run_automation_gerid(file_path, update_label_func=None, update_status_func=N
         update_status_func("Execução finalizada.")
 
 def run_automation_thread(file_path, update_label_func=None, update_status_func=None):
-    thread = threading.Thread(target=run_automation_gerid, args=(file_path, update_label_func, update_status_func))
+    thread = threading.Thread(target=run_automation, args=(file_path, update_label_func, update_status_func))
     thread.start()
     return thread  # Retorna a thread para que possamos acompanhar seu estado

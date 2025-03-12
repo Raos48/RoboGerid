@@ -5,19 +5,22 @@
 #  in conjunction with Tcl version 8.6
 #    Dec 30, 2024 05:30:36 PM -03  platform: Windows NT
 
+import queue  # Adicione esta linha
+import subprocess
+import sys
+import threading
 # --- START CUSTOM CODE ---
 import tkinter as tk
 from tkinter import ttk
-import sys
-import bot_gerid_support
+
 from excel_import import import_excel
-from gerid import run_automation
-import threading
-import subprocess
-import queue  # Adicione esta linha
+from gerid import run_automation_gerid
+
+import bot_gerid_support
+
 
 def run_automation_thread(file_path, update_label_func=None):
-    thread = threading.Thread(target=run_automation, args=(file_path, update_label_func))
+    thread = threading.Thread(target=run_automation_gerid, args=(file_path, update_label_func))
     thread.start()
 
 def vp_start_gui():
