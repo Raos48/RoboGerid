@@ -1,6 +1,7 @@
 # Ambiente virtual
 .venv_new/
 .venv_new/*
+.venv
 
 # Arquivos específicos
 notes.txt
@@ -26,3 +27,11 @@ __pycache__/
 
 # Outros
 .DS_Store
+
+gerid_2025
+build
+dist
+logs_gerid
+*.txt
+venv2
+venv

@@ -14,18 +14,56 @@ from tkinter import ttk
 from excel_import import import_excel
 from gerid import run_automation_gerid
 from saggestao_servidores import run_automation_thread_saggestao
-
+from saggestao_transbordo import run_automation_thread_saggestao_transbordo
+import requests
+from tkinter import messagebox
+import json
 import bot_gerid_support
+import os
 
 
-def run_automation_thread(file_path, update_label_func=None, update_status_func=None):
-    thread = threading.Thread(target=run_automation_gerid, args=(file_path, update_label_func, update_status_func))
+
+def get_github_message():
+    try:
+        # URL do arquivo raw no GitHub contendo a mensagem
+        url = "https://raw.githubusercontent.com/Raos48/RoboGerid/refs/heads/main/message.json"
+        response = requests.get(url)
+        response.raise_for_status()  # Levanta uma exceção para erros HTTP
+        data = json.loads(response.text)
+        return data.get("message"), data.get("block_execution", False)
+    except Exception as e:
+        print(f"Erro ao obter mensagem do GitHub: {e}")
+        return None, False
+
+def truncate_message(message, max_length=100):
+    if len(message) > max_length:
+        return message[:max_length] + "..."
+    return message
+
+
+def show_popup(message, block_execution):
+    if block_execution:
+        messagebox.showerror("Execução Bloqueada", message)
+        sys.exit()
+    else:
+        messagebox.showinfo("Mensagem", message)
+
+
+def run_automation_thread(file_path, update_label_func=None, update_status_func=None,stop_event=None):
+    thread = threading.Thread(target=run_automation_gerid, args=(file_path, update_label_func, update_status_func, stop_event))
     thread.start()
     return thread  # Retorna a thread para que possamos acompanhar seu estado
 
 def vp_start_gui():
-    '''Starting point when module is the main routine.'''
     global val, w, root
+    
+    message, block_execution = get_github_message()
+    if message:
+        show_popup(message, block_execution)
+    
+    if block_execution:
+        return  # Encerra a execução se estiver bloqueada
+    
     root = tk.Tk()
     bot_gerid_support.set_Tk_var()
     top = Toplevel1(root)
@@ -54,7 +92,13 @@ class Toplevel1:
         '''This class configures and populates the toplevel window.
            top is the toplevel containing window.'''
         self.top = top
-        self.automation_thread = None  # Variável para armazenar a thread de automação
+        
+        self.automation_thread = None
+        self.should_stop = False
+        self.stop_event = threading.Event()
+        
+        
+        
         _bgcolor = '#d9d9d9'  # X11 color: 'gray85'
         _fgcolor = '#000000'  # X11 color: 'black'
         _compcolor = '#d9d9d9' # X11 color: 'gray85'
@@ -91,13 +135,13 @@ class Toplevel1:
         # --------------
         self.Label2 = tk.Label(self.Labelframe2)
         self.Label2.place(x=20, y=20, height=30, width=30, bordermode='ignore')
-        self.Label2.configure(activebackground="#f9f9f9")
-        self.Label2.configure(activeforeground="black")
-        self.Label2.configure(background="#d9d9d9")
+        self.Label2.configure(activebackground="#000000")  # Fundo preto
+        self.Label2.configure(activeforeground="green")  # Fonte verde
+        self.Label2.configure(background="#000000")  # Fundo preto
         self.Label2.configure(disabledforeground="#a3a3a3")
-        self.Label2.configure(font="-family {Verdana} -size 10 -weight bold")
-        self.Label2.configure(foreground="#000000")
-        self.Label2.configure(highlightbackground="#d9d9d9")
+        self.Label2.configure(font="-family {Verdana} -size 10 -weight bold")  # Reduzindo o tamanho da fonte
+        self.Label2.configure(foreground="#32CD32")  # Cor verde limão
+        self.Label2.configure(highlightbackground="#000000")
         self.Label2.configure(highlightcolor="black")
         self.Label2.configure(text='''0''')
         # Registros processados========================================
@@ -118,7 +162,7 @@ class Toplevel1:
         self.TCombobox1.configure(textvariable=bot_gerid_support.combobox)
         self.TCombobox1.configure(foreground="#000000")
         self.TCombobox1.configure(takefocus="")
-        self.TCombobox1['values'] = ['Atribuição e Revalidação Acessos GERID', 'Configuração de Perfis SAGGESTÃO']
+        self.TCombobox1['values'] = ['Atribuição e Revalidação Acessos GERID', 'Configuração de Perfis SAGGESTÃO','Configuração de Unidades SAGGESTÃO']
         self.TCombobox1.current(0)  # Define a primeira opção como padrão
         # SELECT FUNCIONALIDADE========================================
 
@@ -207,10 +251,34 @@ class Toplevel1:
         self.Button2.configure(text='''Executar''')        
         self.Button2.configure(command=self.run_selected_automation)
 
-        self.TProgressbar1 = ttk.Progressbar(top)
-        self.TProgressbar1.place(x=20, y=140,height=22, width=514)
-        self.TProgressbar1.configure(length="100")
-        self.TProgressbar1.configure(takefocus="0")
+        # self.TProgressbar1 = ttk.Progressbar(top)
+        # self.TProgressbar1.place(x=20, y=140,height=22, width=410)
+        # self.TProgressbar1.configure(length="100")
+        # self.TProgressbar1.configure(takefocus="0")
+        # BARRA DE PROGRESSO ======================================
+
+
+
+        # LABEL ==================================================
+        # self.newLabel = tk.Label(top)
+        # self.newLabel.place(x=20, y=140, height=22, width=410)
+        # self.newLabel.configure(activebackground="#d9d9d9")
+        # self.newLabel.configure(activeforeground="black")
+        # self.newLabel.configure(background="#d9d9d9")
+        # self.newLabel.configure(disabledforeground="#a3a3a3")
+        # self.newLabel.configure(font="-family {Verdana} -size  -weight bold")
+        # self.newLabel.configure(foreground="#32CD32")  # Cor verde limão
+        # self.newLabel.configure(highlightbackground="#d9d9d9")
+        # self.newLabel.configure(highlightcolor="black")
+        # self.newLabel.configure(text='''Novo elemento informativo''')
+
+
+        self.footerLabel = tk.Label(top, text="Desenvolvido por Ricardo Alves", font="-family {Verdana} -size 8", bg=_bgcolor, fg=_fgcolor)
+        self.footerLabel.place(x=20, y=140, height=22, width=200)
+        # LABEL ==================================================
+
+
+
         # EXECUTAR=================================================
 
         # Frame para o terminal
@@ -227,19 +295,52 @@ class Toplevel1:
 
         # Label para indicar o status da execução
         self.status_label = tk.Label(top)
-        self.status_label.place(x=9, y=483, height=26, width=615)
-        self.status_label.configure(activebackground="#f9f9f9")
-        self.status_label.configure(activeforeground="black")
-        self.status_label.configure(background="#d9d9d9")
+        self.status_label.place(x=9, y=483, height=26, width=615)  # Reduzindo a largura
+        self.status_label.configure(activebackground="#000000")  # Fundo preto
+        self.status_label.configure(activeforeground="#ccff00")  # Fonte verde amarela brilhante
+        self.status_label.configure(background="#000000")  # Fundo preto
         self.status_label.configure(disabledforeground="#a3a3a3")
-        self.status_label.configure(font="-family {Verdana} -size 9 -weight bold")
-        self.status_label.configure(foreground="#000000")
-        self.status_label.configure(highlightbackground="#d9d9d9")
+        self.status_label.configure(font="-family {Verdana} -size 9")  # Removendo o negrito
+        self.status_label.configure(foreground="#ccff00")  # Fonte verde amarela brilhante
+        self.status_label.configure(highlightbackground="#000000")
         self.status_label.configure(highlightcolor="black")
         self.status_label.configure(text='''Aguardando execução...''')
 
+
         self.menubar = tk.Menu(top,font="TkMenuFont",bg=_bgcolor,fg=_fgcolor)
         top.configure(menu = self.menubar)
+        
+        # Adicione este botão na seção Interromper===========================
+        self.Button3 = tk.Button(self.Frame1)
+        self.Button3.place(x=445, y=10, height=28, width=80)
+        self.Button3.configure(activebackground="#ececec")
+        self.Button3.configure(activeforeground="#000000")
+        self.Button3.configure(background="#ff0000")
+        self.Button3.configure(disabledforeground="#a3a3a3")
+        self.Button3.configure(foreground="#000000")
+        self.Button3.configure(highlightbackground="#d9d9d9")
+        self.Button3.configure(highlightcolor="black")
+        self.Button3.configure(pady="0")
+        self.Button3.configure(takefocus="0")
+        self.Button3.configure(text='''Interromper''')
+        self.Button3.configure(command=self.stop_automation)
+
+    def stop_automation(self):
+        if self.automation_thread and self.automation_thread.is_alive():
+            self.should_stop = True
+            self.stop_event.set()
+            print("Solicitação de interrupção recebida...")
+            self.status_label.configure(text="Interrompendo...")
+            # Fecha o navegador se estiver aberto
+            if hasattr(self, 'driver'):
+                try:
+                    self.driver.quit()
+                except Exception as e:
+                    print(f"Erro ao fechar o navegador: {e}")
+        
+        self.status_label.configure(text="Operação interrompida pelo usuário")
+        self.Button3.configure(state='disabled')
+        self.Button2.configure(state='normal')  
 
     
     def run_selected_automation(self):
@@ -248,26 +349,78 @@ class Toplevel1:
             self.run_automation_gerid()
         elif selected_option == 'Configuração de Perfis SAGGESTÃO':
             self.run_automation_saggestao()
+        elif selected_option == 'Configuração de Unidades SAGGESTÃO':
+            self.run_automation_saggestao_transbordo()
         else:
             print("Opção inválida selecionada.")
     
     
     def run_automation_gerid(self):
         if self.file_path:
-            self.automation_thread = run_automation_thread(self.file_path, self.update_label, self.update_status)
+            self.stop_event.clear()
+            self.should_stop = False
+            self.automation_thread = run_automation_thread(
+                self.file_path, 
+                self.update_label, 
+                self.update_status,
+                self.stop_event  # Passe o evento de parada
+            )
         else:
             print("Por favor, importe um arquivo Excel primeiro.")
 
     def run_automation_saggestao(self):
         if self.file_path:  
-            self.automation_thread = run_automation_thread_saggestao(self.file_path, self.update_label, self.update_status)
+            self.automation_thread = run_automation_thread_saggestao(
+                self.file_path, 
+                self.update_label, 
+                self.update_status,
+                self.stop_event  # Adicione este parâmetro
+            )
             print("Executando a automação para Configuração de Perfis SAGGESTÃO.")
+        else:
+            print("Por favor, importe um arquivo Excel primeiro.")
+            
+            
+    def run_automation_saggestao_transbordo(self):
+        if self.file_path:  
+            self.automation_thread = run_automation_thread_saggestao_transbordo(
+                self.file_path, 
+                self.update_label, 
+                self.update_status,
+                self.stop_event  # Adicione este parâmetro
+            )
+            print("Executando a automação para Configuração de TRANSBORDO de Unidades.")
         else:
             print("Por favor, importe um arquivo Excel primeiro.")
     
     def write(self, txt):
-        self.terminal.insert(tk.END, txt)
-        self.terminal.see(tk.END)
+        if not self.stop_event.is_set():
+            # Configure as tags de cor se ainda não existirem
+            if not hasattr(self, 'tags_configured'):
+                self.terminal.tag_configure('success', foreground='#00FF00')  # Verde brilhante
+                self.terminal.tag_configure('error', foreground='#FFFF00')    # Amarelo
+                self.tags_configured = True
+            
+            # Verificar se é uma mensagem de sucesso
+            if "A operação foi executada com sucesso" in txt:
+                self.terminal.insert(tk.END, txt, 'success')
+            # Verificar se é uma mensagem de erro (qualquer mensagem da lista de erros)
+            elif any(error_msg in txt for error_msg in [
+                "Domínio não existe",
+                "Ocorreu um erro de comunicação",
+                "A Data de Validade não deve ser superior",
+                "Gestor de Acesso só pode atribuir acesso",
+                "Não é permitido dar uma autorização a si mesmo",
+                "Erro",
+                "erro"
+            ]):
+                self.terminal.insert(tk.END, txt, 'error')
+            else:
+                # Texto normal em branco (padrão)
+                self.terminal.insert(tk.END, txt)
+            
+            self.terminal.see(tk.END)
+
 
     def flush(self):
         pass
@@ -281,20 +434,31 @@ class Toplevel1:
     def import_file(self):
         try:
             self.workbook, self.sheet, self.file_path = import_excel()
-            if self.file_path:
-                self.Label1.configure(text=self.file_path)
-        except:
-            pass
+            if self.file_path:                
+                file_name = os.path.basename(self.file_path)
+                self.Label1.configure(text=file_name)
+        except Exception as e:
+            print(f"Erro ao importar arquivo: {e}")
 
     def update_label(self, linha):
         self.Label2.configure(text=str(linha - 1))
 
     def update_status(self, status):
+        # Remover os segundos da mensagem de status
+        if "em" in status:
+            status_parts = status.split("em")
+            if len(status_parts) > 1:
+                time_part = status_parts[1].strip()
+                time_without_seconds = ":".join(time_part.split(":")[:2])
+                status = status_parts[0] + " em " + time_without_seconds
+        # Truncar a mensagem se for muito longa
+        status = truncate_message(status)
         self.status_label.configure(text=status)
 
     def on_closing(self):
+        self.stop_automation()
         if self.automation_thread and self.automation_thread.is_alive():
-            self.automation_thread.join()  # Aguarda a thread terminar
+            self.automation_thread.join(timeout=5)
         self.top.destroy()
 
 if __name__ == '__main__':
